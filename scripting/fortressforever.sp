@@ -21,7 +21,7 @@
 #define FORTRESSFOREVER_PROVIDER
 #include <fortressforever>
 
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.1.0"
 
 public Plugin myinfo =
 {
@@ -76,6 +76,11 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("FF_IsTeamFFA", N_IsTeamFFA);
 	CreateNative("FF_SetTeamFFA", N_SetTeamFFA);
 	CreateNative("FF_RunLua", N_RunLua);
+	CreateNative("FF_GetJetpackFuel", N_GetJetpackFuel);
+	CreateNative("FF_SetJetpackFuel", N_SetJetpackFuel);
+	CreateNative("FF_IsJetpackAllowed", N_IsJetpackAllowed);
+	CreateNative("FF_SetJetpackAllowed", N_SetJetpackAllowed);
+	CreateNative("FF_IsJetpacking", N_IsJetpacking);
 	return APLRes_Success;
 }
 
@@ -406,6 +411,49 @@ public any N_RunLua(Handle plugin, int numParams)
 	char[] code = new char[len + 1];
 	GetNativeString(1, code, len + 1);
 	return RunLua(code);
+}
+
+public any N_GetJetpackFuel(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	CheckClient(client);
+	return GetEntProp(client, Prop_Send, "m_iJetpackFuel");
+}
+
+public any N_SetJetpackFuel(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	CheckClient(client);
+	int fuel = GetNativeCell(2);
+	if (fuel < 0) fuel = 0;
+	if (fuel > FF_JETPACK_MAXFUEL) fuel = FF_JETPACK_MAXFUEL;
+	SetEntProp(client, Prop_Send, "m_iJetpackFuel", fuel);
+	return 0;
+}
+
+public any N_IsJetpackAllowed(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	CheckClient(client);
+	return GetEntProp(client, Prop_Send, "m_bCanUseJetpack") != 0;
+}
+
+public any N_SetJetpackAllowed(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	CheckClient(client);
+	bool allowed = GetNativeCell(2);
+	SetEntProp(client, Prop_Send, "m_bCanUseJetpack", allowed ? 1 : 0);
+	if (!allowed)
+		SetEntProp(client, Prop_Send, "m_bJetpacking", 0);
+	return 0;
+}
+
+public any N_IsJetpacking(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	CheckClient(client);
+	return GetEntProp(client, Prop_Send, "m_bJetpacking") != 0;
 }
 
 // ---------------------------------------------------------------- forward

@@ -10,8 +10,14 @@ This repository contains:
 | `gamedata/` | Correct SDKTools and SDKHooks offsets for FF 2.0. SourceMod's own FF gamedata is for the old Fortress Forever 2.4 and is wrong for 2.0 in almost every entry, so `AcceptEntityInput`, `TeleportEntity`, `GivePlayerItem`, `OnPlayerRunCmd`, every SDKHooks hook and more do nothing, do the wrong thing or crash on an FF 2.0 server. |
 | `fortressforever.smx` (library `fortressforever`) | Natives and a forward for FF: classes, class limits, teams and alliances, armour, grenades, Spy disguise and cloak, buildings, respawn and refill. |
 | `ff_teamcolors.smx` | Fixes Yellow players' names showing in **red** in chat (an FF client bug), for `say` and `say_team`. |
+| `ff_targets.smx` | `@team` and `@class` targets for admin commands: `sm_slay @yellow`, `sm_freeze @engineers`, `sm_beacon @redsnipers`. |
+| `ff_pipetint.smx` | Colours the Demoman's grenades and pipebombs in his team's colour (pipebombs a darker shade) instead of always blue and yellow. |
+| `ff_jetpack.smx` | Pyro jetpack control: on/off, infinite fuel, recharge rate, spawn fuel, per-player admin overrides. Needs `fortressforever.smx`. |
+| `ff_twotap.smx` | Two-tap grenades: old `toggleone`/`toggletwo`/`primeone`/`primetwo`/`throwgren` binds work again, `!twotap` makes `+gren1`/`+gren2` two-tap per player, and a chat helper. Needs this gamedata. |
+| `ff_civilian_anywhere.smx` | Allows the Civilian on every map except Hunted, ff_training and maps you list. Needs `fortressforever.smx`. |
 
-Everything is pure SourcePawn and text: no extra extensions. It was tested on a LAN copy
+Everything is pure SourcePawn and text: no extra extensions. The plugins are compiled with
+SourceMod 1.11's compiler, so they load on 1.11 and newer. It was tested on a LAN copy
 of an FF 2.0 server (version 2.0.0.6) with SourceMod 1.11.0.6969 and bots.
 
 ## Install
@@ -21,8 +27,10 @@ of an FF 2.0 server (version 2.0.0.6) with SourceMod 1.11.0.6969 and bots.
    (keep the same sub-paths). Then **restart the server**: gamedata is only read when the
    server starts. Files in `custom/` are read after SourceMod's own, so they override
    `game.ff.txt` and survive SourceMod updates.
-2. **Plugins.** Copy `plugins/fortressforever.smx` and/or `plugins/ff_teamcolors.smx` to
-   `addons/sourcemod/plugins/`. They are independent of each other.
+2. **Plugins.** Copy the plugins you want from `plugins/` to `addons/sourcemod/plugins/`.
+   `ff_jetpack.smx` and `ff_civilian_anywhere.smx` need `fortressforever.smx`; `ff_twotap.smx`
+   needs the gamedata (for `OnPlayerRunCmd`); the others need nothing else. Each writes its
+   `cfg/sourcemod/<name>.cfg` on first load.
 3. **Plugins that use the natives.** Compile them with `scripting/include/` from this
    repository on the include path and `#include <fortressforever>`.
 
@@ -154,6 +162,8 @@ Include: `scripting/include/fortressforever.inc`. Classes use FF's numbers
 | `FF_IsTeamActive`, `FF_Get/SetTeamMaxPlayers` | `m_iMaxPlayers` (-1 = team not used on the map) |
 | `FF_IsTeamFFA`, `FF_SetTeamFFA` | `m_bFFA` |
 | `FF_RunLua(code)` | runs FF map Lua (FF's `lua_dostring` server command) |
+| `FF_Get/SetJetpackFuel` | `m_iJetpackFuel` (0 to `FF_JETPACK_MAXFUEL` = 200) |
+| `FF_IsJetpackAllowed`, `FF_SetJetpackAllowed`, `FF_IsJetpacking` | `m_bCanUseJetpack`, `m_bJetpacking` |
 | `FF_OnPlayerClassChanged(client, old, new)` | FF's `player_changeclass` event |
 
 The Lua-backed natives use FF's `lua_dostring` command followed by `ServerExecute()`, so
@@ -240,6 +250,102 @@ one line in `game/client/ff/hud/ff_hud_chat.cpp`:
 
 With that fix in the client, the plugin's output looks the same as FF's own, so it can stay
 installed.
+
+## ff_targets.smx: team and class targets
+
+Adds targets to every SourceMod command that takes a target (`sm_slay`, `sm_freeze`, `sm_burn`,
+`sm_beacon`, `sm_ff_class`, ...). Dead players are included, as with SourceMod's own team targets;
+commands that need living players filter them out themselves.
+
+| Kind | Targets |
+|---|---|
+| Teams | `@blue` `@red` `@yellow` `@green` `@spectators` (`@spec`) |
+| Classes | `@scouts` `@snipers` `@soldiers` `@demomen` `@medics` `@hwguys` `@pyros` `@spies` `@engineers` `@civilians`, each also singular (`@scout`, `@demoman`, ...) |
+| Aliases | `@demo(s)`, `@heavy` / `@heavies` / `@hw`, `@engi(s)` / `@engy`, `@civ(s)` |
+| Team and class | `@<team><class plural>`: `@bluemedics`, `@greenhwguys`, `@yellowcivilians`, ... (40) |
+
+`sm_ff_targets` lists them. **Verified** on the test server (`sm_fft_targets` in
+`scripting/tests/ff_plugins_test.sp`): every target's player count matched a direct count of
+team and class, on ff_2fort and on the four-team ff_flag4sky (75 of 75 both times).
+
+## ff_pipetint.smx: Demoman projectiles in team colours
+
+FF's grenades and pipebombs share `models/projectiles/pipe/w_pipe.mdl`, which has a blue skin and
+two skins with a yellow, pulsing texture. FF gives every grenade the blue skin and every pipebomb a
+yellow one, whatever the team. The plugin gives each projectile the skin whose texture can be
+tinted to the thrower's team (blue for Blue, yellow for the others: a tint can only filter a
+texture's colours, never add one) and sets its render colour. Pipebombs get a darker shade.
+
+| Team | Grenade (`ff_pipetint_<team>_grenade`) | Pipebomb (`ff_pipetint_<team>_pipe`) |
+|---|---|---|
+| Blue | blue skin, `255 255 255` | blue skin, `140 160 255` |
+| Red | yellow skin, `255 70 50` | yellow skin, `190 30 20` |
+| Yellow | yellow skin, `255 255 255` | yellow skin, `200 170 90` |
+| Green | yellow skin, `110 255 80` | yellow skin, `60 190 40` |
+
+`ff_pipetint_enable 0` turns it off. **Verified** on the test server: every grenade of each of the
+four teams and a Yellow pipebomb got the skin and colour above. **Not verified:** how the colours
+look in a game client. **Client quirk:** FF's client draws pipebombs with the yellow skin for about
+half of all players, whatever the server says (`C_FFProjectilePipebomb::DrawModel`, keyed to the
+viewer's Steam account ID). Those players see Blue's pipebombs as a darkened yellow instead of dark
+blue; the other teams look the same for everyone.
+
+## ff_jetpack.smx: Pyro jetpack control
+
+| Convar | Default | |
+|---|---|---|
+| `ff_jetpack_enable` | 1 | 0 = no Pyro can use the jetpack |
+| `ff_jetpack_infinite` | 0 | fuel never runs out |
+| `ff_jetpack_recharge_scale` | 1.0 | FF's recharge rate (about 24 fuel per second) times this; 0 = no recharge |
+| `ff_jetpack_spawn_fuel` | 100 | fuel (percent) a Pyro spawns with |
+
+Admin commands: `sm_ff_jetpack <target> <1|0|reset>` (allow, forbid, or back to the convar) and
+`sm_ff_jetpack_fuel <target> <0-100>`. The jetpack is predicted by the client, so a changed
+recharge rate shows on the player's fuel meter with the next network update. **Verified** on the
+test server with a Pyro bot: enable/disable, the per-player override and reset, infinite fuel,
+recharge scale 0 / 1 / 3 (fuel 20 after one second: 19 / 44 / 94), spawn fuel.
+
+## ff_twotap.smx: two-tap grenades
+
+FF 2.0 has two grenade binds: `+gren1` / `+gren2` (hold to prime, release to throw) and
+`+togglegren1` / `+togglegren2` (tap to prime, tap again to throw). Older FF and TFC configs use
+the server commands `toggleone`, `toggletwo`, `primeone`, `primetwo` and `throwgren`, which FF 2.0
+no longer has, so those binds do nothing. This plugin:
+
+* adds those five commands back; each presses FF's two-tap grenade button for a short tap;
+* **`!twotap`** (`sm_twotap [1|0]`): makes the player's `+gren1` / `+gren2` keys two-tap, saved with
+  clientprefs when it is loaded;
+* answers chat questions about two-tap grenades (it replaces the older
+  `ff_twotap_grenade_reminder` plugin; unload that one).
+
+| Convar | Default | |
+|---|---|---|
+| `ff_twotap_commands` | 1 | accept the five old commands |
+| `ff_twotap_mode` | 1 | allow `!twotap` |
+| `ff_twotap_mode_default` | 0 | `!twotap` state for players who never chose |
+| `ff_twotap_help` | 1 | chat answer: 0 off, 1 to the asker, 2 to everyone |
+| `ff_twotap_help_cooldown` | 60 | seconds per player |
+| `ff_twotap_help_text` | | the answer |
+
+It changes the buttons of the player's user commands in `OnPlayerRunCmd`, which only runs with this
+repository's gamedata (or another `PlayerRunCmd` 428 override). **Verified** on the test server
+with a bot whose AI was paused (the NextBot plugin rewrites its bots' buttons after SourceMod, so
+an AI-driven bot cannot be used): `primeone`, `throwgren`, `toggleone` twice, `primetwo`,
+`throwgren` and `toggletwo` twice each left the grenade state FF should have; with `!twotap` on, a
+tap of `+gren1` primed, the grenade stayed primed after the release, and the next tap threw it.
+**Not verified with a real client:** the player's own client predicts grenades from the keys he
+presses, so with `!twotap` on it predicts a throw on release that the server does not do, and the
+HUD grenade timer may blink until the server's state reaches him.
+
+## ff_civilian_anywhere.smx: Civilian on every map
+
+Every 2 seconds, sets the Civilian limit of each active team whose map disables the Civilian (-1)
+to `sm_civanywhere_limit` (default 0 = unlimited), through FF's own `SetTeamClassLimit`, so map
+scripts stay stock. `sm_civanywhere_exclude` (default `ff_hunted*,hunted*,ff_training`, trailing
+`*` = prefix) keeps the map's own rule; `sm_civanywhere_enabled 0` turns it off. The convars are
+those of the stand-alone 1.0.0 version from fortressforever-nextbot, so its config keeps working.
+**Verified:** the Civilian limit became 0 for both teams on ff_2fort and for all four on
+ff_flag4sky.
 
 ## Known gaps
 

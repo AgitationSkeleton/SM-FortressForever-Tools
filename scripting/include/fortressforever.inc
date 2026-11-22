@@ -4,9 +4,9 @@
  *
  *   #include <fortressforever>
  *
- * The library is optional by default: a plugin compiled against this file still loads
- * when fortressforever.smx is missing, as long as it checks LibraryExists("fortressforever")
- * before calling the natives. Define REQUIRE_PLUGIN before including it to make it required.
+ * The library is required by default (sourcemod.inc defines REQUIRE_PLUGIN): a plugin using it
+ * fails to load without fortressforever.smx. To make it optional, #undef REQUIRE_PLUGIN before
+ * including this file and check LibraryExists("fortressforever") before calling the natives.
  */
 #if defined _fortressforever_included
  #endinput
@@ -157,6 +157,24 @@ native void FF_SetTeamFFA(FFTeam team, bool ffa);
 native bool FF_RunLua(const char[] code);
 
 /**
+ * Pyro jetpack fuel, 0 to FF_JETPACK_MAXFUEL (200). FF recharges 2 units every 0.08 s while the
+ * player is a Pyro, and a jump needs at least 2. FF_SetJetpackFuel clamps to 0..200.
+ */
+#define FF_JETPACK_MAXFUEL 200
+native int FF_GetJetpackFuel(int client);
+native void FF_SetJetpackFuel(int client, int fuel);
+
+/**
+ * Whether the player may use the jetpack (CFFPlayer::m_bCanUseJetpack, true by default; FF
+ * resets nothing on spawn, so a change lasts until it is changed again).
+ */
+native bool FF_IsJetpackAllowed(int client);
+native void FF_SetJetpackAllowed(int client, bool allowed);
+
+/** Whether the player is jetpacking right now. */
+native bool FF_IsJetpacking(int client);
+
+/**
  * Called after a player's class changed (FF's player_changeclass event).
  */
 forward void FF_OnPlayerClassChanged(int client, FFClass oldclass, FFClass newclass);
@@ -231,6 +249,11 @@ public void __pl_fortressforever_SetNTVOptional()
 	MarkNativeAsOptional("FF_IsTeamFFA");
 	MarkNativeAsOptional("FF_SetTeamFFA");
 	MarkNativeAsOptional("FF_RunLua");
+	MarkNativeAsOptional("FF_GetJetpackFuel");
+	MarkNativeAsOptional("FF_SetJetpackFuel");
+	MarkNativeAsOptional("FF_IsJetpackAllowed");
+	MarkNativeAsOptional("FF_SetJetpackAllowed");
+	MarkNativeAsOptional("FF_IsJetpacking");
 }
 #endif
 #endif
